@@ -1,0 +1,30 @@
+name: Supabase Free-Tier Keep-Alive
+
+on:
+  schedule:
+    # Runs every Monday and Thursday at 08:00 UTC so Supabase Free Tier never pauses after 7 days
+    - cron: "0 8 * * 1,4"
+  workflow_dispatch:
+
+jobs:
+  ping-supabase:
+    name: Ping Supabase REST Endpoint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send keep-alive query to Supabase
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
+            echo "Supabase secrets not configured yet; skipping ping."
+            exit 0
+          fi
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            "${SUPABASE_URL}/rest/v1/categories?select=id&limit=1" \
+            -H "apikey: ${SUPABASE_ANON_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}")
+          echo "Supabase keep-alive HTTP status: $HTTP_STATUS"
+          if [ "$HTTP_STATUS" -ge 500 ]; then
+            exit 1
+          fi

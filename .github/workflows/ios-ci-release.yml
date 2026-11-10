@@ -1,0 +1,117 @@
+name: iOS Build, Test & SideStore OTA Release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "ios/**"
+      - "Package.swift"
+      - "scripts/**"
+      - ".github/workflows/ios-ci-release.yml"
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build Reshima iOS App & Publish IPA
+    runs-on: macos-15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run Core Domain Unit Tests
+        run: swift test
+
+      - name: Install XcodeGen
+        run: |
+          if ! command -v xcodegen >/dev/null 2>&1; then
+            brew install xcodegen
+          fi
+
+      - name: Generate Xcode Project via XcodeGen
+        run: |
+          cd ios
+          xcodegen generate
+
+      - name: Build Unsigned iOS Release App
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          chmod +x scripts/*.sh
+          xcodebuild build \
+            -project ios/Reshima.xcodeproj \
+            -scheme Reshima \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build/DerivedData \
+            SUPABASE_URL="${SUPABASE_URL}" \
+            SUPABASE_ANON_KEY="${SUPABASE_ANON_KEY}" \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Package Unsigned IPA for SideStore / AltStore
+        run: |
+          ./scripts/package-ipa.sh \
+            build/DerivedData/Build/Products/Release-iphoneos/Reshima.app \
+            build/Reshima.ipa
+
+      - name: Generate SideStore / AltStore OTA Source JSON
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        run: |
+          IPA_SIZE=$(stat -f%z build/Reshima.ipa)
+          BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          VERSION="1.0.${{ github.run_number }}"
+          DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/v${VERSION}/Reshima.ipa"
+
+          cat > build/altstore-source.json <<EOF
+          {
+            "name": "Reshima (רשימה) Family Source",
+            "identifier": "com.zipori.reshima.source",
+            "apps": [
+              {
+                "name": "Reshima רשימה",
+                "bundleIdentifier": "com.zipori.reshima",
+                "developerName": "Oren Zipori",
+                "localizedDescription": "Shared household shopping list synced in real-time via Supabase.",
+                "iconURL": "https://raw.githubusercontent.com/${{ github.repository }}/main/ios/Reshima/Resources/AppIcon.png",
+                "versions": [
+                  {
+                    "version": "${VERSION}",
+                    "date": "${BUILD_DATE}",
+                    "localizedDescription": "Automated build #${{ github.run_number }} from commit ${{ github.sha }}",
+                    "downloadURL": "${DOWNLOAD_URL}",
+                    "size": ${IPA_SIZE},
+                    "minOSVersion": "17.0"
+                  }
+                ]
+              }
+            ]
+          }
+          EOF
+
+      - name: Upload IPA & SideStore Source Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Reshima-iOS-Build-${{ github.run_number }}
+          path: |
+            build/Reshima.ipa
+            build/altstore-source.json
+
+      - name: Publish GitHub Release (on push to main)
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          name: "Reshima v1.0.${{ github.run_number }}"
+          files: |
+            build/Reshima.ipa
+            build/altstore-source.json
+          generate_release_notes: true

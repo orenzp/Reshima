@@ -28,15 +28,15 @@ public final class ShoppingStore {
         self.config = loadedConfig
 
         if let cached = persistence.load() {
-            self.householdId = cached.householdId
-            self.listId = cached.listId
+            self.householdId = SupabaseConfig.defaultHouseholdId
+            self.listId = SupabaseConfig.defaultListId
             self.language = cached.language
             self.categories = cached.categories
             self.catalog = cached.catalog
             self.items = cached.items
         } else {
-            let defaultHousehold = UUID()
-            let defaultList = UUID()
+            let defaultHousehold = SupabaseConfig.defaultHouseholdId
+            let defaultList = SupabaseConfig.defaultListId
             let seededCategories = DefaultSeedData.categories(householdId: defaultHousehold)
             let seededCatalog = DefaultSeedData.catalogItems(householdId: defaultHousehold, categories: seededCategories)
 
@@ -285,7 +285,10 @@ public final class ShoppingStore {
         pollTask?.cancel()
         pollTask = Task { [weak self] in
             guard let self else { return }
-            await self.pullRemoteItems()
+            while !Task.isCancelled {
+                await self.pullRemoteItems()
+                try? await Task.sleep(for: .seconds(4))
+            }
         }
     }
 
@@ -294,16 +297,35 @@ public final class ShoppingStore {
         guard config.isConfigured, let url = URL(string: config.urlString) else { return }
         do {
             let client = SupabaseClient(supabaseURL: url, supabaseKey: config.anonKey)
+            let remoteCategories: [Category] = try await client
+                .from("categories")
+                .select()
+                .eq("household_id", value: householdId.uuidString)
+                .order("sort_order", ascending: true)
+                .execute()
+                .value
+            if !remoteCategories.isEmpty {
+                self.categories = remoteCategories
+            }
+
+            let remoteCatalog: [CatalogItem] = try await client
+                .from("catalog_items")
+                .select()
+                .eq("household_id", value: householdId.uuidString)
+                .execute()
+                .value
+            if !remoteCatalog.isEmpty {
+                self.catalog = remoteCatalog
+            }
+
             let remoteItems: [ListItem] = try await client
                 .from("list_items")
                 .select()
                 .eq("list_id", value: listId.uuidString)
                 .execute()
                 .value
-            if !remoteItems.isEmpty {
-                self.items = remoteItems
-                self.persistLocally()
-            }
+            self.items = remoteItems
+            self.persistLocally()
             self.isCloudConnected = true
         } catch {
             self.syncStatusMessage = error.localizedDescription

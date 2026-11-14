@@ -4,9 +4,9 @@ public struct CategoriesSettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @Bindable var store: ShoppingStore
 
-    @State private var supabaseUrl: String = ""
-    @State private var supabaseAnonKey: String = ""
-    @State private var householdCode: String = ""
+    @State private var supabaseUrl: String
+    @State private var supabaseAnonKey: String
+    @State private var householdCode: String
 
     public init(store: ShoppingStore) {
         self.store = store
@@ -19,12 +19,30 @@ public struct CategoriesSettingsView: View {
         NavigationStack {
             List {
                 Section {
-                    Picker("Language / שפה", selection: $store.language) {
+                    Picker(L10n.languageLabel(store.language), selection: $store.language) {
                         ForEach(AppLanguage.allCases) { lang in
                             Text(lang.displayName).tag(lang)
                         }
                     }
                     .pickerStyle(.segmented)
+                }
+
+                Section {
+                    TextField(L10n.householdCodeLabel(store.language), text: $householdCode)
+                        .textInputAutocapitalization(.characters)
+                        .autocorrectionDisabled()
+                        .font(.body.monospaced())
+
+                    Button(L10n.saveSyncSettingsButton(store.language)) {
+                        saveSyncSettings()
+                    }
+                    .bold()
+
+                    syncStatusRow
+                } header: {
+                    Text(L10n.householdCodeLabel(store.language))
+                } footer: {
+                    Text(L10n.householdCodeHint(store.language))
                 }
 
                 Section {
@@ -53,26 +71,15 @@ public struct CategoriesSettingsView: View {
                     Text(L10n.reorderAislesHint(store.language))
                 }
 
-                Section {
-                    TextField(L10n.householdCodeLabel(store.language), text: $householdCode)
-                        .textInputAutocapitalization(.characters)
-                    TextField("Supabase Project URL", text: $supabaseUrl)
+                Section(L10n.advancedSectionTitle(store.language)) {
+                    TextField(L10n.serverUrlLabel(store.language), text: $supabaseUrl)
                         .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
                         .keyboardType(.URL)
-                    SecureField("Supabase Anon Key", text: $supabaseAnonKey)
-
-                    Button(store.language == .hebrew ? "שמור הגדרות סנכרון" : "Save Cloud Sync Settings") {
-                        store.updateSupabaseConfig(
-                            SupabaseConfig(
-                                urlString: supabaseUrl,
-                                anonKey: supabaseAnonKey,
-                                householdInviteCode: householdCode
-                            )
-                        )
-                    }
-                    .bold()
-                } header: {
-                    Text(L10n.householdCodeLabel(store.language))
+                    TextField(L10n.serverKeyLabel(store.language), text: $supabaseAnonKey)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .font(.caption.monospaced())
                 }
             }
             .environment(\.editMode, .constant(.active))
@@ -80,10 +87,56 @@ public struct CategoriesSettingsView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(L10n.saveButton(store.language)) {
+                    Button(L10n.doneButton(store.language)) {
+                        saveSyncSettings()
                         dismiss()
                     }
                 }
+            }
+        }
+    }
+
+    private func saveSyncSettings() {
+        store.updateSupabaseConfig(
+            SupabaseConfig(
+                urlString: supabaseUrl,
+                anonKey: supabaseAnonKey,
+                householdInviteCode: householdCode
+            )
+        )
+    }
+
+    @ViewBuilder
+    private var syncStatusRow: some View {
+        switch store.syncState {
+        case .needsCode:
+            EmptyView()
+        case .connecting:
+            Label(L10n.syncStatusConnecting(store.language), systemImage: "arrow.triangle.2.circlepath")
+                .foregroundStyle(.secondary)
+        case .synced:
+            Label(L10n.syncStatusConnected(store.language), systemImage: "checkmark.circle.fill")
+                .foregroundStyle(.green)
+        case .offline:
+            VStack(alignment: .leading, spacing: 2) {
+                Label(L10n.syncStatusWaitingForNetwork(store.language), systemImage: "wifi.slash")
+                    .foregroundStyle(.orange)
+                if store.pendingChangeCount > 0 {
+                    Text(L10n.pendingChanges(store.language, count: store.pendingChangeCount))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        case .invalidCode:
+            Label(L10n.invalidCodeMessage(store.language), systemImage: "exclamationmark.triangle.fill")
+                .foregroundStyle(.red)
+        case .error(let message):
+            VStack(alignment: .leading, spacing: 2) {
+                Label(L10n.syncStatusError(store.language), systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.red)
+                Text(message)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         }
     }

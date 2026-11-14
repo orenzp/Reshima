@@ -14,7 +14,7 @@ public enum ShoppingListEngine {
         let sortedCategories = categories.sorted { $0.sortOrder < $1.sortOrder }
         let categoryMap = Dictionary(uniqueKeysWithValues: sortedCategories.map { ($0.id, $0) })
 
-        let fallbackCategory = sortedCategories.last(where: { $0.sortOrder >= 80 })
+        let fallbackCategory = sortedCategories.first(where: { $0.kind == CategoryKind.other })
             ?? Category(
                 id: UUID(uuidString: "00000000-0000-0000-0000-000000000099")!,
                 householdId: householdId,
@@ -22,7 +22,8 @@ public enum ShoppingListEngine {
                 nameEn: "Other",
                 icon: "🛒",
                 colorHex: "#6B7280",
-                sortOrder: 999
+                sortOrder: 999,
+                kind: CategoryKind.other
             )
 
         var grouped: [UUID: [ListItem]] = [:]
@@ -110,32 +111,45 @@ public enum ShoppingListEngine {
             return (exact.defaultCategoryId, exact.defaultUnit)
         }
 
-        // Bilingual keyword heuristics for common Hebrew & English items
-        let findCategory: (Int) -> UUID? = { order in
-            categories.first(where: { $0.sortOrder == order })?.id
+        // Bilingual keyword heuristics. A keyword matches when a word of the name starts with it,
+        // so "bun" does not match "abundance". Aisles are looked up by stable `kind`, not position.
+        let words = normalized
+            .components(separatedBy: CharacterSet.letters.union(.decimalDigits).inverted)
+            .filter { !$0.isEmpty }
+        let matches: ([String]) -> Bool = { keywords in
+            keywords.contains { keyword in words.contains { $0.hasPrefix(keyword) } }
+        }
+        let findCategory: (String) -> UUID? = { kind in
+            categories.first(where: { $0.kind == kind })?.id
         }
 
-        let produceKeywords = ["עגבני", "מלפפ", "בצל", "תפוח", "בננ", "אבוקד", "חסה", "גזר", "לימון", "פלפל", "tomato", "cucumber", "apple", "banana", "avocado", "onion", "lemon"]
-        if produceKeywords.contains(where: { normalized.contains($0) }) {
-            return (findCategory(10), .kg)
+        let produceKeywords = ["עגבני", "מלפפ", "בצל", "תפוח", "בננ", "אבוקד", "חסה", "גזר", "לימון", "פלפל", "חציל", "tomato", "cucumber", "apple", "banana", "avocado", "onion", "lemon", "eggplant"]
+        if matches(produceKeywords) {
+            return (findCategory(CategoryKind.produce), .kg)
+        }
+
+        // Checked before meat so "דגנים" (cereal) is not caught by "דג" (fish).
+        let pantryKeywords = ["דגנ", "קורנפלקס", "פסטה", "אורז", "קמח", "סוכר", "cereal", "pasta", "rice", "flour", "sugar"]
+        if matches(pantryKeywords) {
+            return (findCategory(CategoryKind.pantry), .pcs)
         }
 
         let dairyKeywords = ["חלב", "קוטג", "גבינ", "יוגורט", "חמאה", "שמנת", "ביצ", "milk", "cheese", "yogurt", "butter", "egg"]
-        if dairyKeywords.contains(where: { normalized.contains($0) }) {
-            let unit: UnitType = (normalized.contains("ביצ") || normalized.contains("egg")) ? .pack : .pcs
-            return (findCategory(20), unit)
+        if matches(dairyKeywords) {
+            let unit: UnitType = matches(["ביצ", "egg"]) ? .pack : .pcs
+            return (findCategory(CategoryKind.dairy), unit)
         }
 
         let bakeryKeywords = ["לחם", "פית", "חלה", "לחמני", "bread", "pita", "bagel", "bun"]
-        if bakeryKeywords.contains(where: { normalized.contains($0) }) {
-            return (findCategory(30), .pcs)
+        if matches(bakeryKeywords) {
+            return (findCategory(CategoryKind.bakery), .pcs)
         }
 
         let meatKeywords = ["עוף", "בשר", "טחו", "סלמון", "דג", "סטייק", "הודו", "chicken", "beef", "meat", "salmon", "fish"]
-        if meatKeywords.contains(where: { normalized.contains($0) }) {
-            return (findCategory(40), .kg)
+        if matches(meatKeywords) {
+            return (findCategory(CategoryKind.meat), .kg)
         }
 
-        return (categories.last?.id, .pcs)
+        return (findCategory(CategoryKind.other), .pcs)
     }
 }

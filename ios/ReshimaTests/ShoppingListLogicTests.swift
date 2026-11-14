@@ -11,9 +11,9 @@ final class ShoppingListLogicTests: XCTestCase {
 
     func testGroupActiveItemsBySupermarketAisleOrder() {
         let categories = DefaultSeedData.categories(householdId: householdId)
-        let produceCat = categories.first { $0.sortOrder == 10 }!
-        let dairyCat = categories.first { $0.sortOrder == 20 }!
-        let bakeryCat = categories.first { $0.sortOrder == 30 }!
+        let produceCat = categories.first { $0.kind == CategoryKind.produce }!
+        let dairyCat = categories.first { $0.kind == CategoryKind.dairy }!
+        let bakeryCat = categories.first { $0.kind == CategoryKind.bakery }!
 
         let items = [
             ListItem(listId: listId, householdId: householdId, categoryId: bakeryCat.id, name: "לחם מחמצת"),
@@ -73,8 +73,8 @@ final class ShoppingListLogicTests: XCTestCase {
     func testBilingualCategoryAndUnitInference() {
         let categories = DefaultSeedData.categories(householdId: householdId)
         let catalog = DefaultSeedData.catalogItems(householdId: householdId, categories: categories)
-        let produceCatId = categories.first { $0.sortOrder == 10 }?.id
-        let dairyCatId = categories.first { $0.sortOrder == 20 }?.id
+        let produceCatId = categories.first { $0.kind == CategoryKind.produce }?.id
+        let dairyCatId = categories.first { $0.kind == CategoryKind.dairy }?.id
 
         let inferredHebrew = ShoppingListEngine.inferCategoryAndUnit(
             for: "מלפפונים חמוצים או טריים",

@@ -1,0 +1,22 @@
+# Secrets — never commit real credentials
+.env
+.env.*
+!.env.example
+
+# Swift / Xcode build output
+.build/
+build/
+DerivedData/
+*.xcodeproj
+*.xcworkspace
+xcuserdata/
+ios/Reshima/Info.plist
+*.ipa
+.swiftpm/
+
+# Supabase CLI local state
+supabase/.branches/
+supabase/.temp/
+
+# macOS
+.DS_Store

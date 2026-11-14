@@ -6,6 +6,9 @@ on:
     - cron: "0 8 * * 1,4"
   workflow_dispatch:
 
+permissions:
+  actions: write # only to re-enable this workflow (see last step)
+
 jobs:
   ping-supabase:
     name: Ping Supabase REST Endpoint
@@ -20,11 +23,20 @@ jobs:
             echo "Supabase secrets not configured yet; skipping ping."
             exit 0
           fi
+          # Anonymous callers see no rows (RLS), but the query still reaches the database.
           HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
             "${SUPABASE_URL}/rest/v1/categories?select=id&limit=1" \
             -H "apikey: ${SUPABASE_ANON_KEY}" \
             -H "Authorization: Bearer ${SUPABASE_ANON_KEY}")
           echo "Supabase keep-alive HTTP status: $HTTP_STATUS"
-          if [ "$HTTP_STATUS" -ge 500 ]; then
+          if [ "$HTTP_STATUS" != "200" ]; then
+            echo "Keep-alive failed: the project may be paused or the anon key is wrong."
             exit 1
           fi
+
+      - name: Keep this schedule alive
+        # GitHub disables scheduled workflows after 60 days without repository activity.
+        # Re-enabling on every run resets that timer.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/supabase-keepalive.yml/enable"

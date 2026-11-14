@@ -97,13 +97,85 @@ public struct L10n {
         lang == .hebrew ? "מסונכרן בזמן אמת" : "Live Sync Active"
     }
 
-    public static func syncStatusOffline(_ lang: AppLanguage) -> String {
-        lang == .hebrew ? "מצב מקומי / אופליין" : "Local / Offline Mode"
-    }
-
     public static func reorderAislesHint(_ lang: AppLanguage) -> String {
         lang == .hebrew
             ? "גרור כדי להתאים את סדר המחלקות לסופר שלכם"
             : "Drag to match your supermarket's aisle walking order"
+    }
+
+    // MARK: Sync status
+
+    public static func syncStatusConnecting(_ lang: AppLanguage) -> String {
+        lang == .hebrew ? "מתחבר..." : "Connecting..."
+    }
+
+    public static func syncStatusNeedsCode(_ lang: AppLanguage) -> String {
+        lang == .hebrew ? "מקומי בלבד" : "Local only"
+    }
+
+    public static func syncStatusWaitingForNetwork(_ lang: AppLanguage) -> String {
+        lang == .hebrew ? "אופליין" : "Offline"
+    }
+
+    public static func syncStatusInvalidCode(_ lang: AppLanguage) -> String {
+        lang == .hebrew ? "קוד שגוי" : "Wrong code"
+    }
+
+    public static func syncStatusError(_ lang: AppLanguage) -> String {
+        lang == .hebrew ? "שגיאת סנכרון" : "Sync error"
+    }
+
+    public static func pendingChanges(_ lang: AppLanguage, count: Int) -> String {
+        lang == .hebrew ? "\(count) שינויים ממתינים לשליחה" : "\(count) changes waiting to be sent"
+    }
+
+    // MARK: Settings
+
+    public static func householdCodeHint(_ lang: AppLanguage) -> String {
+        lang == .hebrew
+            ? "הזינו את קוד משק הבית בשני המכשירים כדי לשתף את הרשימה. בלי קוד הרשימה נשמרת רק במכשיר הזה."
+            : "Enter the household code on both phones to share the list. Without a code the list stays on this phone only."
+    }
+
+    public static func invalidCodeMessage(_ lang: AppLanguage) -> String {
+        lang == .hebrew ? "הקוד לא מוכר. בדקו אותו ונסו שוב." : "This code is not recognised. Check it and try again."
+    }
+
+    public static func saveSyncSettingsButton(_ lang: AppLanguage) -> String {
+        lang == .hebrew ? "שמור והתחבר" : "Save & Connect"
+    }
+
+    public static func languageLabel(_ lang: AppLanguage) -> String {
+        lang == .hebrew ? "שפה" : "Language"
+    }
+
+    public static func advancedSectionTitle(_ lang: AppLanguage) -> String {
+        lang == .hebrew ? "מתקדם: שרת" : "Advanced: Server"
+    }
+
+    public static func serverUrlLabel(_ lang: AppLanguage) -> String {
+        lang == .hebrew ? "כתובת פרויקט Supabase" : "Supabase Project URL"
+    }
+
+    public static func serverKeyLabel(_ lang: AppLanguage) -> String {
+        lang == .hebrew ? "מפתח Anon של Supabase" : "Supabase Anon Key"
+    }
+
+    public static func doneButton(_ lang: AppLanguage) -> String {
+        lang == .hebrew ? "סיום" : "Done"
+    }
+
+    // MARK: Item details
+
+    public static func itemNamePlaceholder(_ lang: AppLanguage) -> String {
+        lang == .hebrew ? "שם המוצר" : "Item name"
+    }
+
+    public static func choosePhotoButton(_ lang: AppLanguage) -> String {
+        lang == .hebrew ? "בחר תמונה מהגלריה" : "Choose Item Photo"
+    }
+
+    public static func noCategoryLabel(_ lang: AppLanguage) -> String {
+        lang == .hebrew ? "ללא מחלקה" : "No aisle"
     }
 }

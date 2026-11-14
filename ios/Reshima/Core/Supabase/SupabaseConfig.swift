@@ -3,6 +3,8 @@ import Foundation
 public struct SupabaseConfig: Codable, Equatable, Sendable {
     public static let defaultHouseholdId = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
     public static let defaultListId = UUID(uuidString: "00000000-0000-0000-0000-000000000002")!
+    // The anon key is public by design: it only identifies the project. All data access is
+    // gated by Row-Level Security, which requires a signed-in member of the household.
     public static let defaultProjectURL = "https://wlvrqopqvmsbrcigftfo.supabase.co"
     public static let defaultAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndsdnJxb3Bxdm1zYnJjaWdmdGZvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQyNjQ1NjgsImV4cCI6MjEwOTg0MDU2OH0.CjbZWPocQDQ3bQiFeEq_6lQ7LN6ouo3HHrx5sDLgF5U"
 
@@ -10,10 +12,15 @@ public struct SupabaseConfig: Codable, Equatable, Sendable {
     public var anonKey: String
     public var householdInviteCode: String
 
-    public init(urlString: String, anonKey: String, householdInviteCode: String = "ZIPORI") {
+    public init(urlString: String, anonKey: String, householdInviteCode: String = "") {
         self.urlString = urlString.trimmingCharacters(in: .whitespacesAndNewlines)
         self.anonKey = anonKey.trimmingCharacters(in: .whitespacesAndNewlines)
         self.householdInviteCode = householdInviteCode.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+    }
+
+    /// True once the user has typed the household's invite code (it is never bundled with the app).
+    public var hasInviteCode: Bool {
+        !householdInviteCode.isEmpty
     }
 
     public var isConfigured: Bool {
@@ -32,7 +39,10 @@ public struct SupabaseConfig: Codable, Equatable, Sendable {
         let defaults = UserDefaults.standard
         let savedUrl = defaults.string(forKey: "reshima.supabase.url") ?? ""
         let savedKey = defaults.string(forKey: "reshima.supabase.anonKey") ?? ""
-        let savedCode = defaults.string(forKey: "reshima.household.code") ?? "ZIPORI"
+        let storedCode = defaults.string(forKey: "reshima.household.code") ?? ""
+
+        // The legacy shared code no longer works; the real one is entered in Settings.
+        let savedCode = storedCode == "ZIPORI" ? "" : storedCode
 
         if !savedUrl.isEmpty && !savedKey.isEmpty {
             return SupabaseConfig(urlString: savedUrl, anonKey: savedKey, householdInviteCode: savedCode)

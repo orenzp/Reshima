@@ -61,7 +61,7 @@ public struct ShoppingListView: View {
                     .environment(\.layoutDirection, store.language.isRTL ? .rightToLeft : .leftToRight)
             }
             .refreshable {
-                await store.pullRemoteItems()
+                await store.refresh()
             }
         }
     }
@@ -69,11 +69,32 @@ public struct ShoppingListView: View {
     private var syncStatusBadge: some View {
         HStack(spacing: 5) {
             Circle()
-                .fill(store.isCloudConnected ? Color.green : Color.orange)
+                .fill(syncStatusColor)
                 .frame(width: 8, height: 8)
-            Text(store.isCloudConnected ? L10n.syncStatusConnected(store.language) : L10n.syncStatusOffline(store.language))
+            Text(syncStatusText)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private var syncStatusColor: Color {
+        switch store.syncState {
+        case .synced: return .green
+        case .connecting, .offline: return .orange
+        case .needsCode: return .gray
+        case .invalidCode, .error: return .red
+        }
+    }
+
+    private var syncStatusText: String {
+        switch store.syncState {
+        case .synced: return L10n.syncStatusConnected(store.language)
+        case .connecting: return L10n.syncStatusConnecting(store.language)
+        case .offline: return L10n.syncStatusWaitingForNetwork(store.language)
+        case .needsCode: return L10n.syncStatusNeedsCode(store.language)
+        case .invalidCode: return L10n.syncStatusInvalidCode(store.language)
+        case .error: return L10n.syncStatusError(store.language)
         }
     }
 

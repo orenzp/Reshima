@@ -10,7 +10,8 @@ A collaborative, real-time iOS shopping list application for you and your wife, 
 - **Full Bilingual Support (Hebrew RTL & English LTR)**: Instant toggle between `עברית` and `English`, including localized units (`יח׳`, `ק״ג`, `גרם`, `ליטר`, `חב׳` / `pcs`, `kg`, `g`, `L`, `pack`).
 - **Smart Autocomplete & Staples Bar**: Remembers your past items, ranks suggestions by usage frequency, and auto-detects the right aisle and unit in both Hebrew and English.
 - **Quantities, Units, Notes & Photos**: Inline `+ / -` steppers on every row, plus item detail sheets for brand notes and photos.
-- **Offline-First Resilience**: Caches everything locally on your iPhone so the app works smoothly even inside supermarkets with poor reception.
+- **Offline-First Resilience**: Caches everything locally and queues your changes, so the app works inside supermarkets with poor reception and catches up when the signal returns.
+- **Private by Default**: Each phone signs in anonymously and joins your household with a long random invite code; Row-Level Security blocks everyone else, even though the repo and the app's API key are public.
 
 ---
 
@@ -31,14 +32,13 @@ A collaborative, real-time iOS shopping list application for you and your wife, 
    git remote add origin git@github.com:<your-username>/Reshima.git
    git push -u origin main
    ```
-2. In your GitHub repo, go to **Settings -> Secrets and variables -> Actions** and add these 5 Repository Secrets:
+2. In your GitHub repo, go to **Settings -> Secrets and variables -> Actions** and add these 4 Repository Secrets:
    - `SUPABASE_URL`
    - `SUPABASE_ANON_KEY`
    - `SUPABASE_PROJECT_REF`
-   - `SUPABASE_DB_PASSWORD`
    - `SUPABASE_ACCESS_TOKEN`
 3. Once added, GitHub Actions will automatically:
-   - Apply `supabase/migrations/20261109000000_init.sql` to create your tables, RLS policies, Realtime channels, and Storage bucket (`supabase-deploy.yml`).
+   - Apply every file in `supabase/migrations/` (tables, RLS policies, Realtime, Storage bucket) and enable anonymous sign-ins (`supabase-deploy.yml`).
    - Ping your database every Monday and Thursday so the Supabase Free Tier never pauses (`supabase-keepalive.yml`).
    - Build `Reshima.ipa` and publish a GitHub Release (`ios-ci-release.yml`).
 
@@ -52,6 +52,18 @@ Because you are using a free Apple ID:
   ```bash
   make deploy-iphones
   ```
+
+### Step 4: Connect Both Phones to Your Household
+The household invite code is generated inside your database and is never stored in this repo or in the app.
+1. In the Supabase dashboard open **SQL Editor** and run:
+   ```sql
+   select name, invite_code from public.households;
+   ```
+2. On each iPhone open Reshima -> **Settings** (slider icon), type the code under *Shared Household Code* and tap **Save & Connect**.
+3. The badge at the top turns green (*Live Sync Active*). Until a code is entered the list stays on that phone only.
+
+Treat the code like a password: anyone who has it can join your list. To replace it, run
+`update public.households set invite_code = upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 20));` and re-enter it on both phones.
 
 ---
 

@@ -10,15 +10,22 @@ on:
       - ".github/workflows/supabase-deploy.yml"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: supabase-deploy
+  cancel-in-progress: false
+
 jobs:
   deploy-db:
     name: Push SQL Migrations to Supabase
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - name: Apply Declarative SQL Migrations via Supabase Management API
+      - name: Apply SQL Migrations via Supabase Management API
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
@@ -45,25 +52,73 @@ jobs:
             local body
             body=$(echo "$response" | sed '$d')
             if [ "$http_code" -lt 200 ] || [ "$http_code" -ge 300 ]; then
-              echo "SQL execution failed (HTTP $http_code): $body"
+              echo "SQL execution failed (HTTP $http_code): $body" >&2
               exit 1
             fi
             echo "$body"
           }
 
-          echo "==> Ensuring schema_migrations tracking table exists..."
-          run_sql "create table if not exists public.schema_migrations (version text primary key, applied_at timestamptz not null default now());" >/dev/null
+          # Migrations are tracked in the same table and format the Supabase CLI uses
+          # (supabase_migrations.schema_migrations), so `supabase db push` and this workflow agree.
+          # The schema is not exposed through the API. A tracker left in `public` by earlier
+          # versions of this workflow is imported once and removed.
+          echo "==> Ensuring migration history table exists..."
+          run_sql "
+            create schema if not exists supabase_migrations;
+            create table if not exists supabase_migrations.schema_migrations (
+              version text primary key,
+              statements text[],
+              name text
+            );
+            do \$\$
+            begin
+              if to_regclass('public.schema_migrations') is not null then
+                insert into supabase_migrations.schema_migrations (version, name)
+                select split_part(version, '_', 1),
+                       regexp_replace(regexp_replace(version, '^[0-9]+_', ''), '\.sql\$', '')
+                from public.schema_migrations
+                on conflict (version) do nothing;
+                drop table public.schema_migrations;
+              end if;
+            end \$\$;
+          " >/dev/null
 
-          for file in $(ls supabase/migrations/*.sql | sort); do
-            version=$(basename "$file")
-            already_applied=$(run_sql "select version from public.schema_migrations where version = '$version';" | jq -r '.[0].version // empty')
+          for file in supabase/migrations/*.sql; do
+            filename=$(basename "$file")
+            if ! [[ "$filename" =~ ^([0-9]{14})_([a-z0-9_]+)\.sql$ ]]; then
+              echo "Error: '$filename' must be named <14-digit timestamp>_<lowercase_description>.sql"
+              exit 1
+            fi
+            version="${BASH_REMATCH[1]}"
+            name="${BASH_REMATCH[2]}"
+
+            already_applied=$(run_sql "select version from supabase_migrations.schema_migrations where version = '$version';" | jq -r '.[0].version // empty')
             if [ "$already_applied" = "$version" ]; then
-              echo "==> Skipping $version (already applied)"
+              echo "==> Skipping $filename (already applied)"
             else
-              echo "==> Applying migration: $version"
-              sql_body=$(cat "$file")
-              run_sql "$sql_body" >/dev/null
-              run_sql "insert into public.schema_migrations (version) values ('$version') on conflict do nothing;" >/dev/null
-              echo "==> Successfully applied $version"
+              echo "==> Applying migration: $filename"
+              # The migration and its history row go in ONE request so they succeed or fail together.
+              run_sql "$(cat "$file")
+          ;
+          insert into supabase_migrations.schema_migrations (version, name) values ('$version', '$name');" >/dev/null
+              echo "==> Successfully applied $filename"
             fi
           done
+
+      - name: Enable anonymous sign-ins (the app's device login)
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+        run: |
+          set -euo pipefail
+          http_code=$(curl -sS -o response.json -w "%{http_code}" -X PATCH \
+            "https://api.supabase.com/v1/projects/${SUPABASE_PROJECT_REF}/config/auth" \
+            -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d '{"external_anonymous_users_enabled": true}')
+          if [ "$http_code" -lt 200 ] || [ "$http_code" -ge 300 ]; then
+            echo "Could not enable anonymous sign-ins (HTTP $http_code): $(jq -c '{message, error}' response.json 2>/dev/null || true)"
+            echo "Enable it by hand: Supabase dashboard -> Authentication -> Sign In / Providers -> Allow anonymous sign-ins."
+            exit 1
+          fi
+          echo "Anonymous sign-ins enabled."

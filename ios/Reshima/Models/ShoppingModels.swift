@@ -9,6 +9,12 @@ public enum UnitType: String, Codable, CaseIterable, Identifiable, Sendable {
 
     public var id: String { rawValue }
 
+    /// Unknown units (e.g. written by a newer app version) fall back to pieces instead of failing the whole list.
+    public init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = UnitType(rawValue: raw) ?? .pcs
+    }
+
     public func localizedLabel(_ language: AppLanguage) -> String {
         switch (self, language) {
         case (.pcs, .hebrew): return "יח׳"
@@ -21,6 +27,14 @@ public enum UnitType: String, Codable, CaseIterable, Identifiable, Sendable {
         case (.liter, .english): return "L"
         case (.pack, .hebrew): return "חב׳"
         case (.pack, .english): return "pack"
+        }
+    }
+
+    /// Largest quantity the detail stepper allows for this unit.
+    public var maxQuantity: Double {
+        switch self {
+        case .pcs, .pack, .liter, .kg: return 100.0
+        case .g: return 10_000.0
         }
     }
 
@@ -41,6 +55,8 @@ public struct Category: Identifiable, Codable, Equatable, Hashable, Sendable {
     public var icon: String
     public var colorHex: String
     public var sortOrder: Int
+    /// Stable identity of a built-in aisle (see `CategoryKind`). Survives reordering, unlike `sortOrder`.
+    public var kind: String?
 
     public init(
         id: UUID = UUID(),
@@ -49,7 +65,8 @@ public struct Category: Identifiable, Codable, Equatable, Hashable, Sendable {
         nameEn: String,
         icon: String = "🛒",
         colorHex: String = "#10B981",
-        sortOrder: Int = 0
+        sortOrder: Int = 0,
+        kind: String? = nil
     ) {
         self.id = id
         self.householdId = householdId
@@ -58,6 +75,7 @@ public struct Category: Identifiable, Codable, Equatable, Hashable, Sendable {
         self.icon = icon
         self.colorHex = colorHex
         self.sortOrder = sortOrder
+        self.kind = kind
     }
 
     public func localizedName(_ language: AppLanguage) -> String {
@@ -72,7 +90,19 @@ public struct Category: Identifiable, Codable, Equatable, Hashable, Sendable {
         case icon
         case colorHex = "color_hex"
         case sortOrder = "sort_order"
+        case kind
     }
+}
+
+public enum CategoryKind {
+    public static let produce = "produce"
+    public static let dairy = "dairy"
+    public static let bakery = "bakery"
+    public static let meat = "meat"
+    public static let pantry = "pantry"
+    public static let frozen = "frozen"
+    public static let household = "household"
+    public static let other = "other"
 }
 
 public struct CatalogItem: Identifiable, Codable, Equatable, Hashable, Sendable {
@@ -212,24 +242,24 @@ public struct AisleGroup: Identifiable, Equatable, Sendable {
 public enum DefaultSeedData {
     public static func categories(householdId: UUID) -> [Category] {
         [
-            Category(householdId: householdId, nameHe: "פירות וירקות", nameEn: "Produce", icon: "🥦", colorHex: "#10B981", sortOrder: 10),
-            Category(householdId: householdId, nameHe: "מוצרי חלב וביצים", nameEn: "Dairy & Eggs", icon: "🧀", colorHex: "#3B82F6", sortOrder: 20),
-            Category(householdId: householdId, nameHe: "מאפים ולחם", nameEn: "Bakery & Bread", icon: "🥖", colorHex: "#F59E0B", sortOrder: 30),
-            Category(householdId: householdId, nameHe: "בשר, עוף ודגים", nameEn: "Meat & Fish", icon: "🥩", colorHex: "#EF4444", sortOrder: 40),
-            Category(householdId: householdId, nameHe: "מזווה ובישול", nameEn: "Pantry & Dry Goods", icon: "🍝", colorHex: "#8B5CF6", sortOrder: 50),
-            Category(householdId: householdId, nameHe: "קפואים", nameEn: "Frozen", icon: "🧊", colorHex: "#06B6D4", sortOrder: 60),
-            Category(householdId: householdId, nameHe: "ניקיון ופארם", nameEn: "Home & Pharmacy", icon: "🧼", colorHex: "#EC4899", sortOrder: 70),
-            Category(householdId: householdId, nameHe: "כללי", nameEn: "Other", icon: "🛒", colorHex: "#6B7280", sortOrder: 80)
+            Category(householdId: householdId, nameHe: "פירות וירקות", nameEn: "Produce", icon: "🥦", colorHex: "#10B981", sortOrder: 10, kind: CategoryKind.produce),
+            Category(householdId: householdId, nameHe: "מוצרי חלב וביצים", nameEn: "Dairy & Eggs", icon: "🧀", colorHex: "#3B82F6", sortOrder: 20, kind: CategoryKind.dairy),
+            Category(householdId: householdId, nameHe: "מאפים ולחם", nameEn: "Bakery & Bread", icon: "🥖", colorHex: "#F59E0B", sortOrder: 30, kind: CategoryKind.bakery),
+            Category(householdId: householdId, nameHe: "בשר, עוף ודגים", nameEn: "Meat & Fish", icon: "🥩", colorHex: "#EF4444", sortOrder: 40, kind: CategoryKind.meat),
+            Category(householdId: householdId, nameHe: "מזווה ובישול", nameEn: "Pantry & Dry Goods", icon: "🍝", colorHex: "#8B5CF6", sortOrder: 50, kind: CategoryKind.pantry),
+            Category(householdId: householdId, nameHe: "קפואים", nameEn: "Frozen", icon: "🧊", colorHex: "#06B6D4", sortOrder: 60, kind: CategoryKind.frozen),
+            Category(householdId: householdId, nameHe: "ניקיון ופארם", nameEn: "Home & Pharmacy", icon: "🧼", colorHex: "#EC4899", sortOrder: 70, kind: CategoryKind.household),
+            Category(householdId: householdId, nameHe: "כללי", nameEn: "Other", icon: "🛒", colorHex: "#6B7280", sortOrder: 80, kind: CategoryKind.other)
         ]
     }
 
     public static func catalogItems(householdId: UUID, categories: [Category]) -> [CatalogItem] {
-        let produceId = categories.first { $0.sortOrder == 10 }?.id
-        let dairyId = categories.first { $0.sortOrder == 20 }?.id
-        let bakeryId = categories.first { $0.sortOrder == 30 }?.id
-        let meatId = categories.first { $0.sortOrder == 40 }?.id
-        let pantryId = categories.first { $0.sortOrder == 50 }?.id
-        let cleaningId = categories.first { $0.sortOrder == 70 }?.id
+        let produceId = categories.first { $0.kind == CategoryKind.produce }?.id
+        let dairyId = categories.first { $0.kind == CategoryKind.dairy }?.id
+        let bakeryId = categories.first { $0.kind == CategoryKind.bakery }?.id
+        let meatId = categories.first { $0.kind == CategoryKind.meat }?.id
+        let pantryId = categories.first { $0.kind == CategoryKind.pantry }?.id
+        let cleaningId = categories.first { $0.kind == CategoryKind.household }?.id
 
         return [
             CatalogItem(householdId: householdId, name: "חלב 3%", defaultCategoryId: dairyId, defaultUnit: .pcs, usageCount: 25, isStaple: true),

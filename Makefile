@@ -6,7 +6,7 @@ help: ## Show available agent and developer commands
 setup: ## Install CLI tools via Homebrew (xcodegen, swiftlint, supabase, gh)
 	./scripts/setup-dev.sh
 
-test: ## Run Swift domain & logic unit tests via SwiftPM (works without full Xcode)
+test: ## Run Swift domain & sync logic unit tests via SwiftPM (needs full Xcode for XCTest)
 	swift test
 
 generate: ## Generate ios/Reshima.xcodeproj from ios/project.yml using XcodeGen
@@ -29,7 +29,7 @@ package-ipa: ## Package compiled Release .app into unsigned Reshima.ipa for Side
 deploy-iphones: ## Wirelessly build & install directly to connected/Wi-Fi iPhones
 	./scripts/deploy-iphones.sh
 
-db-push: ## Push declarative SQL migrations to linked Supabase project
+db-push: ## Push SQL migrations to the linked Supabase project (shares its history table with CI)
 	supabase db push
 
 check-sql: ## Verify SQL migration files exist and are non-empty

@@ -7,7 +7,9 @@ public struct ItemDetailSheet: View {
 
     @State private var draft: ListItem
     @State private var selectedPhotoItem: PhotosPickerItem?
+    /// Newly picked photo, already resized to JPEG.
     @State private var attachedPhotoData: Data?
+    @State private var existingPhotoData: Data?
 
     public init(store: ShoppingStore, item: ListItem) {
         self.store = store
@@ -18,7 +20,7 @@ public struct ItemDetailSheet: View {
         NavigationStack {
             Form {
                 Section {
-                    TextField(L10n.itemDetailsTitle(store.language), text: $draft.name)
+                    TextField(L10n.itemNamePlaceholder(store.language), text: $draft.name)
                         .font(.headline)
 
                     HStack {
@@ -26,7 +28,7 @@ public struct ItemDetailSheet: View {
                         Spacer()
                         Stepper(
                             value: $draft.quantity,
-                            in: 0.5...100,
+                            in: draft.unit.stepIncrement...max(draft.unit.maxQuantity, draft.quantity),
                             step: draft.unit.stepIncrement
                         ) {
                             Text(draft.formattedQuantity)
@@ -41,10 +43,18 @@ public struct ItemDetailSheet: View {
                         }
                     }
                     .pickerStyle(.segmented)
+                    .onChange(of: draft.unit) { _, newUnit in
+                        // e.g. switching 2 pcs to grams: 2 g is below the smallest step.
+                        if draft.quantity < newUnit.stepIncrement {
+                            draft.quantity = newUnit.stepIncrement
+                        }
+                    }
                 }
 
                 Section(L10n.categoryLabel(store.language)) {
                     Picker(L10n.categoryLabel(store.language), selection: $draft.categoryId) {
+                        Text(L10n.noCategoryLabel(store.language))
+                            .tag(UUID?.none)
                         ForEach(store.categories.sorted(by: { $0.sortOrder < $1.sortOrder })) { cat in
                             Text("\(cat.icon) \(cat.localizedName(store.language))")
                                 .tag(Optional(cat.id))
@@ -59,27 +69,16 @@ public struct ItemDetailSheet: View {
 
                 Section(L10n.photoLabel(store.language)) {
                     PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
-                        Label(
-                            store.language == .hebrew ? "בחר תמונה מהגלריה" : "Choose Item Photo",
-                            systemImage: "photo.badge.plus"
-                        )
+                        Label(L10n.choosePhotoButton(store.language), systemImage: "photo.badge.plus")
                     }
                     .onChange(of: selectedPhotoItem) { _, newValue in
                         Task {
-                            if let data = try? await newValue?.loadTransferable(type: Data.self) {
-                                attachedPhotoData = data
-                            }
+                            guard let original = try? await newValue?.loadTransferable(type: Data.self) else { return }
+                            attachedPhotoData = ImageResizer.jpegData(from: original)
                         }
                     }
 
-                    if let data = attachedPhotoData, let uiImage = UIImage(data: data) {
-                        Image(uiImage: uiImage)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(maxHeight: 180)
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
-                    } else if let existingPath = draft.photoPath,
-                              let uiImage = UIImage(contentsOfFile: existingPath) {
+                    if let data = attachedPhotoData ?? existingPhotoData, let uiImage = UIImage(data: data) {
                         Image(uiImage: uiImage)
                             .resizable()
                             .scaledToFit()
@@ -111,10 +110,17 @@ public struct ItemDetailSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(L10n.saveButton(store.language)) {
-                        store.updateItem(draft, newPhotoData: attachedPhotoData)
+                        store.updateItem(draft, newPhotoJPEG: attachedPhotoData)
                         dismiss()
                     }
                     .bold()
+                    .disabled(draft.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+            .task {
+                // Shows the cached copy, or downloads the photo the other phone attached.
+                if let path = draft.photoPath {
+                    existingPhotoData = await store.photoData(forStoragePath: path)
                 }
             }
         }

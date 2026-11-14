@@ -26,9 +26,11 @@ site_url = "reshima://auth-callback"
 additional_redirect_urls = ["reshima://auth-callback"]
 jwt_expiry = 3600
 enable_signup = true
+# The app signs each phone in anonymously; data access then requires joining a household by invite code.
+enable_anonymous_sign_ins = true
 
 [auth.email]
-enable_signup = true
+enable_signup = false
 double_confirm_changes = false
 enable_confirmations = false
 
